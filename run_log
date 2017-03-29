@@ -1,0 +1,199 @@
+#!/bin/bash
+################################################################################
+##
+## Log script for the WRS
+##
+## Authors:
+##	- Felipe Torres González (torresfelipex1<AT>gmail.com)
+##
+##
+## System requirements: sshpass
+##
+## GNU Lesser General Public License Usage
+## This file may be used under the terms of the GNU Lesser
+## General Public License version 2.1 as published by the Free Software
+## Foundation and appearing in the file LICENSE.LGPL included in the
+## packaging of this file.  Please review the following information to
+## ensure the GNU Lesser General Public License version 2.1 requirements
+## will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+################################################################################
+
+# Enable verbose message output from the script
+VERBOSE_MSG=0
+
+# Remote username (in the WRS is 'root' & pass '')
+REMOTE_USER='root'
+REMOTE_PASS=''
+
+SSH_OPTIONS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=error"
+
+# File where the result of each check will be stored
+LOG_FILE="x"
+
+# Trap Ctrl-C and call ctrl_c() to end the test
+trap ctrl_c INT
+
+# Remote device (right now only WRS)
+REMOTE_NAME="WRS"
+REMOTE_ADDR=
+
+# Enable oven Switchoff
+#   This variable allows to connect a relay to the Host to switchoff the
+#   equipment if the maximum temperature is reached.
+OVENSWITCH="OFF"
+
+SYNC="OFF"
+
+# -------------------------------------------
+
+# Function to check if a device is alive
+check_alive()
+{
+    if [ $VERBOSE_MSG != 0 ]; then
+        echo -e "\033[1mChecking connection with $REMOTE_NAME ($REMOTE_ADDR)...\033[0m"
+    fi
+    ping -c 1 $1 &> /dev/null
+    if [ $? -ne 0 ]; then
+      echo -e "\e[31mCould not connect with $REMOTE_NAME($REMOTE_ADDR)\033[0m"
+      return 1
+    fi
+}
+
+# Run the test using a ssh connection
+runsshtest()
+{
+  # First check that the device is alive
+  check_alive $REMOTE
+  if [ $? == 1 ]; then return 1;fi
+
+  echo -e "\033[1mRunning test in the $REMOTE_NAME ($REMOTE_ADDR)...\033[0m"
+  ## TODO: change for a test function
+  stat=$(sshpass -p $REMOTE_PASS ssh $SSH_OPTIONS $REMOTE_USER@$REMOTE $TEST 2>&1)
+  echo $stat >> temp
+
+  if [ $LOG_FILE == "x" ]; then
+    echo -e ">>> $REMOTE_USER@$REMOTE -- $(date "+%H:%M:%S %d-%m-%Y")" 2>&1
+    cat temp
+  else
+    echo -e ">>> $REMOTE_USER@$REMOTE -- $(date "+%H:%M:%S %d-%m-%Y")" >> $LOG_FILE
+    cat temp >> $LOG_FILE
+  fi
+  rm temp
+}
+
+# -------------------------------------------
+
+test()
+{
+  # Check sync
+  if [ $SYNC == "ON" ];then
+
+  fi
+  if [ $TEMP == "ON" ];then
+  
+  fi
+}
+
+# -------------------------------------------
+
+ctrl_c()
+{
+  # Called from ctrl-c
+  if [ $CHECK == "x" ]; then
+    CHECK_LOG=$LOG_FILE
+  else
+    if [[ $SYNC != "-s" && $TEMP != *"-t"* ]]; then
+      echo -e "\033[31mYou must specify a checking argument: \033[1m-s or -t\033[0m"
+      exit 3
+    else
+      CHECK_LOG=$CHECK
+    fi
+  fi
+  # Check the raw log if it exists
+  if [ -f $CHECK_LOG ]; then
+    echo -e "\033[1mChecking the raw generated log...\033[0m"
+    PYTOOL_FLAGS="$SYNC $TEMP $VERBOSE"
+    $PYTOOL $CHECK_LOG $PYTOOL_FLAGS > temp
+    if [ $? -gt 0 ]; then
+      echo -e "\033[31mSome errors occured:\033[0m"
+      cat temp
+      rm temp
+      exit 2
+    else
+      echo -e "\033[34mNo errors occured\033[0m"
+      exit 0
+    fi
+  else
+    echo -e "\033[1mNo LOG file to check, bye!\033[0m"
+    exit 0
+  fi
+}
+
+# -------------------------------------------
+
+help()
+{
+cat << EOF
+Usage: $(basename $0) [options]
+
+Options:
+-h|--help           Prints this help
+-v|--verbose        Enables verbose mode
+-r|--remote         Remote address (IP)
+-i|--interval       Checking rate
+-s|--sync           Enable synchronization checking
+-t|--temp min,max   Enable temperature checking
+-x|--secureoff      Switchoff oven when temp max is reached
+-o|--output         Write output to file
+-c|--check [log]    Only check a raw test log (bug: use in the last position)
+
+EOF
+exit 0
+}
+
+
+while [ $# -gt 0 ]; do # Until you run out of parameters . . .
+  case "$1" in
+    -h|--help) help;;
+    -v|--verbose) VERBOSE="-v";;
+    -r|--remote) REMOTE_ADDR=$2;shift;;
+    -i|--interval) INTERVAL=$2;shift;;
+    -t|--temp)
+      TEMP="ON";
+      MIN=$(echo $2 | cut -d"," -f1);
+      MAX=$(echo $2 | cut -d"," -f2);
+      shift;;
+    -s|--sync) SYNC="ON";;
+    -o|--output) LOG_FILE=$2;shift;;
+    -x|--secureoff) OVENSWITCH="ON"; shift;;
+    -c|--check) CHECK=$2; ctrl_c $CHECK; shift;;
+    *) echo "Unknown arg: $1"; help;;
+  esac
+  shift   # Check next set of parameters.
+done
+
+if [ $CONN == "ssh" ]; then
+  echo -e "\033[1mRunning test over ssh\n\033[0m"
+  if [ $INTERVAL != "x" ]; then
+    while true
+    do
+      runsshtest
+      sleep $INTERVAL
+    done
+  fi
+  runsshtest
+  ctrl_c
+elif [ $CONN == "ethbone" ]; then
+  echo -e "\033[1mRunning test over Etherbone\n\033[0m"
+  if [ $INTERVAL != "x" ]; then
+    while true
+    do
+      runethtest
+      sleep $INTERVAL
+    done
+  fi
+  runethtest
+  ctrl_c
+else
+  echo -e "\033[31Invalid connection seleted, valid types are: ssh or eth\n\033[0m"
+fi
