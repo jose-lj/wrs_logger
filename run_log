@@ -52,8 +52,14 @@ TEMP="OFF"
 BUS="w1"
 BUS_PATH=/sys/bus/$BUS/devices/
 # DS18B20+ OneWire sensors have an unique address starting by 28
-SENSOR_HADDR="28-"
+SENSOR_HADDR="28"
 SENSORS=0
+
+# Alias to ease the access to the WRS
+wrs_cmd()
+{
+  sshpass -p '' ssh $SSH_OPTIONS root@$REMOTE_ADDR $1 2>&1
+}
 
 # -------------------------------------------
 
@@ -66,7 +72,7 @@ check_alive()
     ping -c 1 $1 &> /dev/null
     if [ $? -ne 0 ]; then
       echo -e "\e[31mCould not connect with $REMOTE_NAME($REMOTE_ADDR)\033[0m"
-      return 1
+      exit 1
     fi
 }
 
@@ -100,48 +106,69 @@ read_tsensors()
         temp=$(cat $BUS_PATH/$s/w1_slave)
         temp=$(echo $temp | grep -oh "t=[0-9]\{5\}" | cut -d'=' -f2)
         temp=$(echo "scale=3;$temp/1000" | bc)
-        echo "$s:$temp"
+        echo -e "$s:$temp \c"
     done
 }
 
 # -------------------------------------------
 
-# Run the test using a ssh connection
-runsshtest()
+# Function to check the WRS sw version
+# If version is not supported the script exits
+
+wrs_version()
 {
-  # First check that the device is alive
-  check_alive $REMOTE
-  if [ $? == 1 ]; then return 1;fi
-
-  echo -e "\033[1mRunning test in the $REMOTE_NAME ($REMOTE_ADDR)...\033[0m"
-  ## TODO: change for a test function
-  stat=$(sshpass -p $REMOTE_PASS ssh $SSH_OPTIONS $REMOTE_USER@$REMOTE $TEST 2>&1)
-  echo $stat >> temp
-
-  if [ $LOG_FILE == "x" ]; then
-    echo -e ">>> $REMOTE_USER@$REMOTE -- $(date "+%H:%M:%S %d-%m-%Y")" 2>&1
-    cat temp
-  else
-    echo -e ">>> $REMOTE_USER@$REMOTE -- $(date "+%H:%M:%S %d-%m-%Y")" >> $LOG_FILE
-    cat temp >> $LOG_FILE
-  fi
-  rm temp
+    ver=$(wrs_cmd "/wr/bin/wrs_version -v -v")
+    ver=$(echo $ver | grep -oh "v[0-9]\.[0-9]*")
+    if [ $ver != "v5.0" ];then
+        echo "WRS version $ver is not supported."
+        exit 1
+    fi
 }
 
 # -------------------------------------------
 
+# Run the test using a ssh connection
 test()
 {
-  # Check sync
-  if [ $SYNC == "ON" ];then
+    # First check that the device is alive
+    check_alive $REMOTE_ADDR
+    temps=$(temp_check)
 
-  fi
-  if [ $TEMP == "ON" ];then
-  
-  fi
+    echo -e "$(date +%s) $temps"
+
+
+  # echo -e "\033[1mRunning test in the $REMOTE_NAME ($REMOTE_ADDR)...\033[0m"
+  # ## TODO: change for a test function
+  # stat=$(sshpass -p $REMOTE_PASS ssh $SSH_OPTIONS $REMOTE_USER@$REMOTE $TEST 2>&1)
+  # echo $stat >> temp
+  #
+  # if [ $LOG_FILE == "x" ]; then
+  #   echo -e ">>> $REMOTE_USER@$REMOTE -- $(date "+%H:%M:%S %d-%m-%Y")" 2>&1
+  #   cat temp
+  # else
+  #   echo -e ">>> $REMOTE_USER@$REMOTE -- $(date "+%H:%M:%S %d-%m-%Y")" >> $LOG_FILE
+  #   cat temp >> $LOG_FILE
+  # fi
+  # rm temp
 }
 
 # -------------------------------------------
+
+temp_check()
+{
+    search_tsensors
+    cur_temp=$(read_tsensors)
+    wrs_temp=$(wrs_cmd "/wr/bin/wr_mon -wt")
+    wrs_temp=$(echo $wrs_temp | grep -oh "FPGA.* PLL: [0-9]*.[0-9]*")
+    #wrs_temp=$(echo -e "${wrs_temp}" | tr -d '[:space:]')
+    echo "$cur_temp$wrs_temp"
+}
+
+# -------------------------------------------
+
+temp_check
+
+exit 0
 
 ctrl_c()
 {
@@ -190,7 +217,7 @@ Options:
 -i|--interval       Checking rate
 -s|--sync           Enable synchronization checking
 -t|--temp min,max   Enable temperature checking
--x|--secureoff      Switchoff oven when temp max is reached
+-x|--secureoff      Switchoff oven when temp max is reached. User must specify the lower address of the temp sensor
 -o|--output         Write output to file
 -c|--check [log]    Only check a raw test log (bug: use in the last position)
 
@@ -212,7 +239,7 @@ while [ $# -gt 0 ]; do # Until you run out of parameters . . .
       shift;;
     -s|--sync) SYNC="ON";;
     -o|--output) LOG_FILE=$2;shift;;
-    -x|--secureoff) OVENSWITCH="ON"; shift;;
+    -x|--secureoff) OVENSWITCH="ON"; SENSOR_TAG=$2;shift;;
     -c|--check) CHECK=$2; ctrl_c $CHECK; shift;;
     *) echo "Unknown arg: $1"; help;;
   esac
