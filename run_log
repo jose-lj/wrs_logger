@@ -127,6 +127,35 @@ wrs_version()
 
 # -------------------------------------------
 
+temp_range_check()
+{	
+	wrs_temps=$(temp_check)
+	#wrs_temp_fpga=$(echo $wrs_temp | grep -oh "FPGA: [0-9.]\{4\}." | cut -d' ' -f2)
+	#wrs_temp_pll=$(echo $wrs_temp | grep -oh "PLL: [0-9.]\{4\}." | cut -d' ' -f2)
+	if [ $SENSOR_TAG == "FPGA" ]; then
+		temp_sensor=$(echo $wrs_temps | grep -oh "$SENSOR_TAG: [0-9.]\{4\}." | cut -d' ' -f2)
+		temp_sensor=${temp_sensor%.*} #Converter to integer
+	
+	elif [ $SENSOR_TAG == "PLL" ]; then
+		temp_sensor=$(echo $wrs_temps | grep -oh "$SENSOR_TAG: [0-9.]\{4\}." | cut -d' ' -f2)
+		temp_sensor=${temp_sensor%.*}
+		
+	else	
+		temp_sensor=$(echo $wrs_temps | grep -oh "$SENSOR_TAG:[0-9.]\{4\}." | cut -d':' -f2)
+		temp_sensor=${temp_sensor%.*}
+	fi	
+	
+	if [ $temp_sensor -gt $MAX ]; then
+		echo "OutOfRange"
+	elif [ $temp_sensor -lt $MIN ]; then
+		echo "OutOfRange"
+	else
+		echo "InsideOfRange"
+	fi
+}
+
+# -------------------------------------------------------------------
+
 # Run the test using a ssh connection
 test()
 {
