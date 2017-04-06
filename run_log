@@ -176,9 +176,16 @@ test()
     # First check that the device is alive
     check_alive $REMOTE_ADDR
     temps=$(temp_check)
-
-    echo -e "$(date +%s) $temps"
-
+	
+	if [ $SYNC == "ON" ]; then
+		syncs=$(sync_check)
+	fi
+	
+	if [ $TEMP == "ON" ]; then
+		range=$(temp_range_check)
+	fi	
+    
+	echo -e "$(date +%s) $temps $syncs $range"
 
   # echo -e "\033[1mRunning test in the $REMOTE_NAME ($REMOTE_ADDR)...\033[0m"
   # ## TODO: change for a test function
