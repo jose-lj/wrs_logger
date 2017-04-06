@@ -147,8 +147,22 @@ temp_range_check()
 	
 	if [ $temp_sensor -gt $MAX ]; then
 		echo "OutOfRange"
+		if [ $OVENSWITCH == "ON" ]; then
+			python gpio.py $GPIOVEN off
+			#echo -e "\033[1mTurning off\n\033[0m"
+			sleep 5
+			python gpio.py $GPIOVEN on
+			exit 0
+		fi
 	elif [ $temp_sensor -lt $MIN ]; then
 		echo "OutOfRange"
+		if [ $OVENSWITCH == "ON" ]; then
+			python gpio.py $GPIOVEN off
+			#echo -e "\033[1mTurning off\n\033[0m"
+			sleep 5
+			python gpio.py $GPIOVEN on
+			exit 0
+		fi
 	else
 		echo "InsideOfRange"
 	fi
