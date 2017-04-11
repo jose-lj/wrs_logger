@@ -5,6 +5,7 @@
 ##
 ## Authors:
 ##	- Felipe Torres González (torresfelipex1<AT>gmail.com)
+##  - Daniel Melgarejo
 ##
 ##
 ## System requirements: sshpass
@@ -27,8 +28,14 @@ REMOTE_PASS=''
 
 SSH_OPTIONS="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=error"
 
+# Default timeout
+INTERVAL=0
+
 # File where the result of each check will be stored
-LOG_FILE="x"
+HEADEREDOUT=0
+
+# WRMON log (save calls to the wrs)
+WRMON="x"
 
 # Trap Ctrl-C and call ctrl_c() to end the test
 trap ctrl_c INT
@@ -42,6 +49,7 @@ REMOTE_ADDR=
 #   equipment if the maximum temperature is reached.
 OVENSWITCH="OFF"
 
+# Enable synchronization checking
 SYNC="OFF"
 
 # Temerature control ----
@@ -112,7 +120,7 @@ read_tsensors()
 
 # -------------------------------------------
 
-# Function to check the WRS sw version
+# Function to check the WRS's sw version
 # If version is not supported the script exits
 
 wrs_version()
@@ -127,40 +135,59 @@ wrs_version()
 
 # -------------------------------------------
 
+# Function to get temperature from external sensors (1W) and
+# from the FPGA & PLL of the WRS (wr_mon)
+temp_check()
+{
+    if [[ $VERBOSE_MSG -eq 1 ]]; then
+        echo -e "Checking temperatures..."
+    fi
+    search_tsensors
+    cur_temp=$(read_tsensors)
+    if [ $WRMON == "x" ]; then
+        WRMON=$(wrs_cmd "/wr/bin/wr_mon -wt")
+    fi
+    wrs_temp=$(echo $WRMON | grep -oh "FPGA.* PLL: [0-9]*.[0-9]*")
+    #wrs_temp=$(echo -e "${wrs_temp}" | tr -d '[:space:]')
+    echo "$cur_temp$wrs_temp"
+}
+
+# -------------------------------------------
+
 temp_range_check()
-{	
+{
 	wrs_temps=$(temp_check)
 	#wrs_temp_fpga=$(echo $wrs_temp | grep -oh "FPGA: [0-9.]\{4\}." | cut -d' ' -f2)
 	#wrs_temp_pll=$(echo $wrs_temp | grep -oh "PLL: [0-9.]\{4\}." | cut -d' ' -f2)
 	if [ $SENSOR_TAG == "FPGA" ]; then
 		temp_sensor=$(echo $wrs_temps | grep -oh "$SENSOR_TAG: [0-9.]\{4\}." | cut -d' ' -f2)
-		temp_sensor=${temp_sensor%.*} #Converter to integer
-	
+		temp_sensor=${temp_sensor%.*}
+
 	elif [ $SENSOR_TAG == "PLL" ]; then
 		temp_sensor=$(echo $wrs_temps | grep -oh "$SENSOR_TAG: [0-9.]\{4\}." | cut -d' ' -f2)
 		temp_sensor=${temp_sensor%.*}
-		
-	else	
+
+	else
 		temp_sensor=$(echo $wrs_temps | grep -oh "$SENSOR_TAG:[0-9.]\{4\}." | cut -d':' -f2)
 		temp_sensor=${temp_sensor%.*}
-	fi	
-	
+	fi
+
 	if [ $temp_sensor -gt $MAX ]; then
 		echo "OutOfRange"
 		if [ $OVENSWITCH == "ON" ]; then
-			python gpio.py $GPIOVEN off
+			python gpio $GPIOVEN off
 			#echo -e "\033[1mTurning off\n\033[0m"
 			sleep 5
-			python gpio.py $GPIOVEN on
+			python gpio $GPIOVEN on
 			exit 0
 		fi
 	elif [ $temp_sensor -lt $MIN ]; then
 		echo "OutOfRange"
 		if [ $OVENSWITCH == "ON" ]; then
-			python gpio.py $GPIOVEN off
+			python gpio $GPIOVEN off
 			#echo -e "\033[1mTurning off\n\033[0m"
 			sleep 5
-			python gpio.py $GPIOVEN on
+			python gpio $GPIOVEN on
 			exit 0
 		fi
 	else
@@ -168,89 +195,55 @@ temp_range_check()
 	fi
 }
 
-# -------------------------------------------------------------------
+# -------------------------------------------
 
-# Run the test using a ssh connection
-test()
+# Check the arguments to sync flag
+check_synclevel()
 {
-    # First check that the device is alive
-    check_alive $REMOTE_ADDR
-    temps=$(temp_check)
-	
-	if [ $SYNC == "ON" ]; then
-		syncs=$(sync_check)
-	fi
-	
-	if [ $TEMP == "ON" ]; then
-		range=$(temp_range_check)
-	fi	
-    
-	echo -e "$(date +%s) $temps $syncs $range"
-
-  # echo -e "\033[1mRunning test in the $REMOTE_NAME ($REMOTE_ADDR)...\033[0m"
-  # ## TODO: change for a test function
-  # stat=$(sshpass -p $REMOTE_PASS ssh $SSH_OPTIONS $REMOTE_USER@$REMOTE $TEST 2>&1)
-  # echo $stat >> temp
-  #
-  # if [ $LOG_FILE == "x" ]; then
-  #   echo -e ">>> $REMOTE_USER@$REMOTE -- $(date "+%H:%M:%S %d-%m-%Y")" 2>&1
-  #   cat temp
-  # else
-  #   echo -e ">>> $REMOTE_USER@$REMOTE -- $(date "+%H:%M:%S %d-%m-%Y")" >> $LOG_FILE
-  #   cat temp >> $LOG_FILE
-  # fi
-  # rm temp
+    if [[ $1 -ne 1 && $1 -ne 2 ]]; then
+        echo -e "\e[31mNot a valid sync level introduced. Exiting...\033[0m"
+        exit 1
+    fi
 }
 
 # -------------------------------------------
 
-temp_check()
+# Check the synchronization status of the WRS
+sync_check()
 {
-    search_tsensors
-    cur_temp=$(read_tsensors)
-    wrs_temp=$(wrs_cmd "/wr/bin/wr_mon -wt")
-    wrs_temp=$(echo $wrs_temp | grep -oh "FPGA.* PLL: [0-9]*.[0-9]*")
-    #wrs_temp=$(echo -e "${wrs_temp}" | tr -d '[:space:]')
-    echo "$cur_temp$wrs_temp"
+    if [[ $VERBOSE_MSG -eq 1 ]]; then
+        echo -e "Checking synchronization..."
+    fi
+    if [ $WRMON == "x" ]; then
+        WRMON=$(wrs_cmd "/wr/bin/wr_mon -we")
+    fi
+    if [[ $VERBOSE_MSG -eq 1 ]]; then
+        echo -e "\tLink Status: $link_status"
+    fi
+    # Save linkup and servo state
+    wrs_servo=$(echo $WRMON | grep -oh "lock:[0-1]")
+    wrs_TF=$(echo $WRMON | grep -oh "ss:.[A-Z_]\{11\}." | cut -d':' -f2)
+    echo -e "$wrs_servo sync:$wrs_TF\c"
+    if [[ $SYNC_LEVEL -ge 2 ]]; then
+      # Save Round Trip Time
+      rtt=$(echo $WRMON | grep -oh "mu:[0-9]*" | cut -d':' -f2)
+      # Save bitslide values
+      drxm=$(echo $WRMON | grep -oh "drxm:[0-9]*" | cut -d':' -f2)
+      drxs=$(echo $WRMON | grep -oh "drxs:[0-9]*" | cut -d':' -f2)
+      echo -e " rtt:$rtt drxm:$drxm drxs:$drxs"
+    fi
+
+
 }
 
 # -------------------------------------------
 
-temp_check
-
-exit 0
-
+# Trap for the ctrl-c key combination
 ctrl_c()
 {
-  # Called from ctrl-c
-  if [ $CHECK == "x" ]; then
-    CHECK_LOG=$LOG_FILE
-  else
-    if [[ $SYNC != "-s" && $TEMP != *"-t"* ]]; then
-      echo -e "\033[31mYou must specify a checking argument: \033[1m-s or -t\033[0m"
-      exit 3
-    else
-      CHECK_LOG=$CHECK
-    fi
-  fi
-  # Check the raw log if it exists
-  if [ -f $CHECK_LOG ]; then
-    echo -e "\033[1mChecking the raw generated log...\033[0m"
-    PYTOOL_FLAGS="$SYNC $TEMP $VERBOSE"
-    $PYTOOL $CHECK_LOG $PYTOOL_FLAGS > temp
-    if [ $? -gt 0 ]; then
-      echo -e "\033[31mSome errors occured:\033[0m"
-      cat temp
-      rm temp
-      exit 2
-    else
-      echo -e "\033[34mNo errors occured\033[0m"
-      exit 0
-    fi
-  else
-    echo -e "\033[1mNo LOG file to check, bye!\033[0m"
+    # Called from ctrl-c
+    echo -e "\033[1mBye!\033[0m"
     exit 0
-  fi
 }
 
 # -------------------------------------------
@@ -265,59 +258,82 @@ Options:
 -v|--verbose        Enables verbose mode
 -r|--remote         Remote address (IP)
 -i|--interval       Checking rate
+-d|--header         Write a description header of the log values
 -s|--sync           Enable synchronization checking
+                    Levels:
+                        1 -> Servo state
+                        2 -> 1 + RTT and Bitslides
 -t|--temp min,max   Enable temperature checking
--x|--secureoff      Switchoff oven when temp max is reached. User must specify the lower address of the temp sensor
--o|--output         Write output to file
--c|--check [log]    Only check a raw test log (bug: use in the last position)
+-x|--secureoff      Switchoff oven when temp max is reached.
+                    User must specify the lower address of the temp sensor
 
 EOF
 exit 0
 }
 
+# -------------------------------------------
 
+# Main test loop
+test()
+{
+    WRMON="x" # reset the log
+    # First check that the device is still alive
+    check_alive $REMOTE_ADDR
+    # Get temperature values from the sensors
+    temps=$(temp_check)
+
+    # Save synchronization status
+    if [ $SYNC == "ON" ]; then
+        syncs=$(sync_check)
+    fi
+
+    # Control of the temperature range
+    if [ $TEMP == "ON" ]; then
+        range=$(temp_range_check)
+    fi
+
+    echo -e "$(date +%s) $temps $syncs $range"
+}
+
+# -------------------------------------------
+
+if [ $# -eq 0 ]; then help; exit 1; fi
 while [ $# -gt 0 ]; do # Until you run out of parameters . . .
-  case "$1" in
-    -h|--help) help;;
-    -v|--verbose) VERBOSE="-v";;
-    -r|--remote) REMOTE_ADDR=$2;shift;;
-    -i|--interval) INTERVAL=$2;shift;;
-    -t|--temp)
-      TEMP="ON";
-      MIN=$(echo $2 | cut -d"," -f1);
-      MAX=$(echo $2 | cut -d"," -f2);
-      shift;;
-    -s|--sync) SYNC="ON";;
-    -o|--output) LOG_FILE=$2;shift;;
-    -x|--secureoff) OVENSWITCH="ON"; SENSOR_TAG=$2;shift;;
-    -c|--check) CHECK=$2; ctrl_c $CHECK; shift;;
-    *) echo "Unknown arg: $1"; help;;
-  esac
-  shift   # Check next set of parameters.
+    case "$1" in
+        -h|--help) help;;
+        -v|--verbose) VERBOSE="-v";;
+        -r|--remote) REMOTE_ADDR=$2;shift;;
+        -i|--interval) INTERVAL=$2;shift;;
+        -d|--header) HEADEREDOUT=1;shift;;
+        -t|--temp)
+          TEMP="ON";
+          MIN=$(echo $2 | cut -d"," -f1);
+          MAX=$(echo $2 | cut -d"," -f2);
+          shift;;
+        -s|--sync)
+            SYNC="ON";
+            SYNC_LEVEL=$2;
+            check_synclevel $SYNC_LEVEL;
+            shift;;
+        -x|--secureoff)
+            OVENSWITCH="ON";
+            SENSOR_TAG=$2;
+            shift;;
+        *) echo "Unknown arg: $1"; help;;
+    esac
+    shift   # Check next set of parameters.
 done
 
-if [ $CONN == "ssh" ]; then
-  echo -e "\033[1mRunning test over ssh\n\033[0m"
-  if [ $INTERVAL != "x" ]; then
-    while true
-    do
-      runsshtest
-      sleep $INTERVAL
-    done
-  fi
-  runsshtest
-  ctrl_c
-elif [ $CONN == "ethbone" ]; then
-  echo -e "\033[1mRunning test over Etherbone\n\033[0m"
-  if [ $INTERVAL != "x" ]; then
-    while true
-    do
-      runethtest
-      sleep $INTERVAL
-    done
-  fi
-  runethtest
-  ctrl_c
-else
-  echo -e "\033[31Invalid connection seleted, valid types are: ssh or eth\n\033[0m"
+# Main script -------------------------------
+
+echo -e "\033[1mRunning test...\033[0m"
+echo -e "\tConnecting to WRS ($REMOTE_ADDR)"
+if [ $HEADEREDOUT == 1 ]; then
+    echo "# Epoch seconds $tempsensors $devtemp $synclabels"
 fi
+
+while true
+do
+    test
+    sleep $INTERVAL
+done
