@@ -203,6 +203,13 @@ check_synclevel()
 
 # -------------------------------------------
 
+wrmonstat()
+{
+    echo $(wrs_cmd "/wr/bin/wr_mon -we")
+}
+
+# -------------------------------------------
+
 # Check the synchronization status of the WRS
 sync_check()
 {
