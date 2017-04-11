@@ -5,7 +5,7 @@
 ##
 ## Authors:
 ##	- Felipe Torres González (torresfelipex1<AT>gmail.com)
-##  - Daniel Melgarejo
+##  - Daniel Melgarejo García
 ##
 ##
 ## System requirements: sshpass
@@ -159,11 +159,11 @@ temp_range_check()
 	wrs_temps=$(temp_check)
 	#wrs_temp_fpga=$(echo $wrs_temp | grep -oh "FPGA: [0-9.]\{4\}." | cut -d' ' -f2)
 	#wrs_temp_pll=$(echo $wrs_temp | grep -oh "PLL: [0-9.]\{4\}." | cut -d' ' -f2)
-	if [ $SENSOR_TAG == "FPGA" ]; then
+	if [[ $SENSOR_TAG == "FPGA" ]]; then
 		temp_sensor=$(echo $wrs_temps | grep -oh "$SENSOR_TAG: [0-9.]\{4\}." | cut -d' ' -f2)
 		temp_sensor=${temp_sensor%.*}
 
-	elif [ $SENSOR_TAG == "PLL" ]; then
+	elif [[ $SENSOR_TAG == "PLL" ]]; then
 		temp_sensor=$(echo $wrs_temps | grep -oh "$SENSOR_TAG: [0-9.]\{4\}." | cut -d' ' -f2)
 		temp_sensor=${temp_sensor%.*}
 
@@ -172,23 +172,23 @@ temp_range_check()
 		temp_sensor=${temp_sensor%.*}
 	fi
 
-	if [ $temp_sensor -gt $MAX ]; then
+	if [[ $temp_sensor -gt $MAX ]]; then
 		echo "OutOfRange"
 		if [ $OVENSWITCH == "ON" ]; then
-			python gpio $GPIOVEN off
+			python gpio.py $GPIOVEN off
 			#echo -e "\033[1mTurning off\n\033[0m"
 			sleep 5
-			python gpio $GPIOVEN on
-			exit 0
+			python gpio.py $GPIOVEN on
+			exit 1
 		fi
-	elif [ $temp_sensor -lt $MIN ]; then
+	elif [[ $temp_sensor -lt $MIN ]]; then
 		echo "OutOfRange"
 		if [ $OVENSWITCH == "ON" ]; then
-			python gpio $GPIOVEN off
+			python gpio.py $GPIOVEN off
 			#echo -e "\033[1mTurning off\n\033[0m"
 			sleep 5
-			python gpio $GPIOVEN on
-			exit 0
+			python gpio.py $GPIOVEN on
+			exit 1
 		fi
 	else
 		echo "InsideOfRange"
