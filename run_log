@@ -207,9 +207,7 @@ sync_check()
     if [[ $VERBOSE_MSG -eq 1 ]]; then
         echo -e "Checking synchronization..."
     fi
-    if [ $WRMON == "x" ]; then
-        WRMON=$(wrs_cmd "/wr/bin/wr_mon -we")
-    fi
+    WRMON=$1
     if [[ $VERBOSE_MSG -eq 1 ]]; then
         echo -e "\tLink Status: $link_status"
     fi
