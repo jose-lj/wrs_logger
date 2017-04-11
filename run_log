@@ -48,6 +48,7 @@ REMOTE_ADDR=
 #   This variable allows to connect a relay to the Host to switchoff the
 #   equipment if the maximum temperature is reached.
 OVENSWITCH="OFF"
+GPIOVEN=17
 
 # Enable synchronization checking
 SYNC="OFF"
@@ -172,26 +173,20 @@ temp_range_check()
 		temp_sensor=${temp_sensor%.*}
 	fi
 
-	if [[ $temp_sensor -gt $MAX ]]; then
+	if [[ $(echo $temp_sensor | cut -d'.' -f1) -gt $MAX ]]; then	#this loop doesn't accept float number. So, we change to intenger
 		echo "OutOfRange"
 		if [ $OVENSWITCH == "ON" ]; then
 			python gpio.py $GPIOVEN off
 			#echo -e "\033[1mTurning off\n\033[0m"
-			sleep 5
-			python gpio.py $GPIOVEN on
 			exit 1
 		fi
-	elif [[ $temp_sensor -lt $MIN ]]; then
+	elif [[ $(echo $temp_sensor | cut -d'.' -f1) -lt $MIN ]]; then      #this loop doesn't accept float number. So, we change to intenger
 		echo "OutOfRange"
 		if [ $OVENSWITCH == "ON" ]; then
 			python gpio.py $GPIOVEN off
 			#echo -e "\033[1mTurning off\n\033[0m"
-			sleep 5
-			python gpio.py $GPIOVEN on
 			exit 1
 		fi
-	else
-		echo "InsideOfRange"
 	fi
 }
 
