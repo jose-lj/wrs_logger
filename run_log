@@ -267,23 +267,24 @@ exit 0
 # Main test loop
 test()
 {
-    WRMON="x" # reset the log
     # First check that the device is still alive
     check_alive $REMOTE_ADDR
+	WRMON=$(wrmonstat)
     # Get temperature values from the sensors
-    temps=$(temp_check)
+    temps=$(temp_check "$WRMON")
 
     # Save synchronization status
     if [ $SYNC == "ON" ]; then
-        syncs=$(sync_check)
+        syncs=$(sync_check "$WRMON")
     fi
 
     # Control of the temperature range
     if [ $TEMP == "ON" ]; then
-        range=$(temp_range_check)
+        temp_range_check "$temps"
+        if [[ $? -gt 0 ]]; then exit $?; fi
     fi
 
-    echo -e "$(date +%s) $temps $syncs $range"
+    echo -e "$(date +%s) $temps $syncs"
 }
 
 # -------------------------------------------
