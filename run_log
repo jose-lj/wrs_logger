@@ -5,7 +5,7 @@
 ##
 ## Authors:
 ##	- Felipe Torres González (torresfelipex1<AT>gmail.com)
-##  - Daniel Melgarejo García
+##  	- Daniel Melgarejo García
 ##
 ##
 ## System requirements: sshpass
@@ -183,6 +183,17 @@ temp_range_check()
 
 # -------------------------------------------
 
+check_secureoff()
+{
+
+if [[ $1 -eq "" ]]; then
+        echo -e "\e[31m-x parameter needs a temperature sensor's name (Sensor_Tag)\033[0m"
+        exit 1
+    fi
+}
+
+#--------------------------------------------
+
 # Check the arguments to sync flag
 check_synclevel()
 {
@@ -310,6 +321,7 @@ while [ $# -gt 0 ]; do # Until you run out of parameters . . .
         -x|--secureoff)
             OVENSWITCH="ON";
             SENSOR_TAG=$2;
+	    check_secureoff $SENSOR_TAG;
             shift;;
         *) echo "Unknown arg: $1"; help;;
     esac
