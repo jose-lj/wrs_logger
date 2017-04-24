@@ -186,7 +186,7 @@ temp_range_check()
 check_secureoff()
 {
 
-if [[ $1 -eq "" ]]; then
+if [[ $1 == "" ]]; then
         echo -e "\e[31m-x parameter needs a temperature sensor's name (Sensor_Tag)\033[0m"
         exit 1
     fi
