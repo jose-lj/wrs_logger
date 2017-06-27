@@ -250,6 +250,14 @@ ctrl_c()
 
 # -------------------------------------------
 
+# Check that all needed software is installed
+# else exit.
+check_sw()
+{
+    command -v bc >/dev/null 2>&1 || { echo >&2 "bc not installed. Will now exit."; exit 1; }
+    command -v sshpass >/dev/null 2>&1 || { echo >&2 "sshpass not installed. Will now exit."; exit 1; }
+}
+
 help()
 {
 cat << EOF
@@ -335,6 +343,8 @@ echo -e "\tConnecting to WRS ($REMOTE_ADDR)"
 if [ $HEADEREDOUT == 1 ]; then
     echo "# Epoch seconds $tempsensors $devtemp $synclabels"
 fi
+
+check_sw
 
 while true
 do
