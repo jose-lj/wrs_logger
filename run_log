@@ -145,7 +145,7 @@ temp_check()
     fi
     search_tsensors
     cur_temp=$(read_tsensors)
-    if [ $WRMON == "x" ]; then
+    if [ "$WRMON" == "x" ]; then
         WRMON=$(wrs_cmd "/wr/bin/wr_mon -wt")
     fi
     wrs_temp=$(echo $WRMON | grep -oh "FPGA.* PLL: [0-9]*.[0-9]*")
