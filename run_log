@@ -57,6 +57,10 @@ SYNC="OFF"
 
 # ENABLE TEMP LOG
 TEMP="OFF"
+
+# ENABLE TEMP LOG FOR SFP
+SFP_PORT=0
+
 # BUS used for external sensors
 BUS="w1"
 BUS_PATH=/sys/bus/$BUS/devices/
@@ -239,9 +243,20 @@ sync_check()
 }
 
 # -------------------------------------------
+check_sfp_temp()
+{
+    check_sfp=$(echo $(wrs_cmd "/wr/bin/wrs_sfp_temp_lite -p $SFP_PORT"))
+    sfp_result=$(echo $check_sfp | cut -d':' -f3)
+    echo -e "sfp_temp:$sfp_result"
+
+}
+
+# -------------------------------------------
+
+# -------------------------------------------
 
 # Trap for the ctrl-c key combination
-ctrl_c()
+ctrl_c() 
 {
     # Called from ctrl-c
     echo -e "\033[1mBye!\033[0m"
@@ -274,6 +289,7 @@ Options:
                         1 -> Servo state
                         2 -> 1 + RTT and Bitslides
 -t|--temp min,max   Enable temperature checking
+-e|--sfp port       Log SFP temperature in port
 -x|--secureoff      Switchoff oven when temp max is reached.
                     User must specify the lower address of the temp sensor
 
@@ -303,7 +319,11 @@ test()
         if [[ $? -gt 0 ]]; then exit $?; fi
     fi
 
-    echo -e "$(date +%s) $temps $syncs"
+    # Get temperature from SFPs
+    if [ "$SFP_PORT" -gt 0 ]; then
+        sfp_temp=$(check_sfp_temp "$SFP_PORT")
+    fi
+    echo -e "$(date +%s) $temps $sfp_temp $syncs"
 }
 
 # -------------------------------------------
@@ -330,6 +350,9 @@ while [ $# -gt 0 ]; do # Until you run out of parameters . . .
             OVENSWITCH="ON";
             SENSOR_TAG=$2;
 	    check_secureoff $SENSOR_TAG;
+            shift;;
+        -e|--sfp)
+            SFP_PORT=$2;
             shift;;
         *) echo "Unknown arg: $1"; help;;
     esac
