@@ -4,8 +4,9 @@
 ## Log script for the WRS
 ##
 ## Authors:
-##	- Felipe Torres González (torresfelipex1<AT>gmail.com)
+##	    - Felipe Torres González (torresfelipex1<AT>gmail.com)
 ##  	- Daniel Melgarejo García
+##      - Jose Lopez-Jimenez ( joselj <AT> ugr . es )
 ##
 ##
 ## System requirements: sshpass
@@ -60,6 +61,7 @@ TEMP="OFF"
 
 # ENABLE TEMP LOG FOR SFP
 SFP_PORT=0
+SFP_PORT_CNT=0
 
 # BUS used for external sensors
 BUS="w1"
@@ -245,9 +247,14 @@ sync_check()
 # -------------------------------------------
 check_sfp_temp()
 {
-    check_sfp=$(echo $(wrs_cmd "/wr/bin/wrs_sfp_temp_lite -p $SFP_PORT"))
-    sfp_result=$(echo $check_sfp | cut -d':' -f3)
-    echo -e "sfp_temp:$sfp_result"
+    ((SFP_PORT_CNT++))
+    if( ((SFP_PORT_CNT % 40)) -eq 0  )
+        check_sfp=$(echo $(wrs_cmd "/wr/bin/wrs_sfp_temp_lite -p $SFP_PORT"))
+        sfp_result=$(echo $check_sfp | cut -d':' -f3)
+        echo -e "sfp_temp:$sfp_result"
+    else
+        echo -e "sfp_temp:notyet"
+    fi
 
 }
 
