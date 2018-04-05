@@ -60,6 +60,7 @@ TEMP="OFF"
 
 # ENABLE TEMP LOG FOR SFP
 SFP_PORT=0
+SFP_TEMP_CNT=0
 
 # BUS used for external sensors
 BUS="w1"
@@ -245,9 +246,15 @@ sync_check()
 # -------------------------------------------
 check_sfp_temp()
 {
-    check_sfp=$(echo $(wrs_cmd "/wr/bin/wrs_sfp_temp_lite -p $SFP_PORT"))
-    sfp_result=$(echo $check_sfp | cut -d':' -f3)
-    echo -e "sfp_temp:$sfp_result"
+    VAR_MOD=$(( $2 % 10))
+    if [ "$VAR_MOD" -eq "0" ];then
+        check_sfp=$(echo $(wrs_cmd "/wr/bin/wrs_sfp_temp_lite -p $SFP_PORT"))
+        sfp_result=$(echo $check_sfp | cut -d':' -f3)
+        echo -e "sfp_temp:$2"
+        #echo -e "sfp_temp:$sfp_result"
+    else
+        echo -e "sfp_temp:$2"
+    fi
 
 }
 
@@ -321,7 +328,8 @@ test()
 
     # Get temperature from SFPs
     if [ "$SFP_PORT" -gt 0 ]; then
-        sfp_temp=$(check_sfp_temp "$SFP_PORT")
+        SFP_TEMP_CNT=$((SFP_TEMP_CNT+1))
+        sfp_temp=$(check_sfp_temp "$SFP_PORT" "$SFP_TEMP_CNT")
     fi
     echo -e "$(date +%s) $temps $sfp_temp $syncs"
 }
