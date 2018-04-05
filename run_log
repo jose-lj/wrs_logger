@@ -246,14 +246,13 @@ sync_check()
 # -------------------------------------------
 check_sfp_temp()
 {
-    VAR_MOD=$(( $2 % 10))
+    VAR_MOD=$(( $2 % 60))
     if [ "$VAR_MOD" -eq "0" ];then
         check_sfp=$(echo $(wrs_cmd "/wr/bin/wrs_sfp_temp_lite -p $SFP_PORT"))
         sfp_result=$(echo $check_sfp | cut -d':' -f3)
-        echo -e "sfp_temp:$2"
-        #echo -e "sfp_temp:$sfp_result"
+        echo -e "sfp_temp:$sfp_result"
     else
-        echo -e "sfp_temp:$2"
+        echo -e "sfp_temp:0.000"
     fi
 
 }
