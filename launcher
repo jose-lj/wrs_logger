@@ -1,0 +1,6 @@
+#!/bin/bash
+
+until ./run_log -r $1 -s 2 -e $2 | tee $3; do
+    echo "Logger crashed with exit code $?. Respawning..." >&2
+    sleep 1
+done

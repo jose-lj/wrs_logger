@@ -86,7 +86,7 @@ check_alive()
     ping -c 1 $1 &> /dev/null
     if [ $? -ne 0 ]; then
       echo -e "\e[31mCould not connect with $REMOTE_NAME($REMOTE_ADDR)\033[0m"
-      exit 1
+      #exit 1
     fi
 }
 
